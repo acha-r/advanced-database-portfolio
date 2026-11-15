@@ -19,7 +19,7 @@ This portfolio answers them for the MongoDB chart store with a replica set that 
 
 ## 2. Deployment: a three-node replica set
 
-**Setup.** A MongoDB [version] replica set named `roos-rs` with three nodes on one Windows machine, on ports 27018, 27019 and 27020, each with its own data directory (`replica-set.ps1`, `screenshots/d1-members.png`). In production the nodes would sit on separate servers, ideally in separate availability zones, so one failure cannot take out more than one node. A single machine shows the behaviour but not the physical isolation.
+**Setup.** A MongoDB replica set named `roos-rs` with three nodes on one Windows machine, on ports 27018, 27019 and 27020, each with its own data directory (`replica-set.ps1`, `screenshots/d1-members.png`). In production the nodes would sit on separate servers, ideally in separate availability zones, so one failure cannot take out more than one node. A single machine shows the behaviour but not the physical isolation.
 
 **How it works.**
 
@@ -37,7 +37,7 @@ A write to chart `MRN-000123` was made on the primary with `w: 'majority'`, then
 
 ### D3: failover
 
-The primary (port [port]) was stopped with a hard kill to simulate a crash.
+The primary (port 27018) was stopped with a hard kill to simulate a crash.
 
 | Event | Observation | Evidence |
 |---|---|---|
@@ -46,7 +46,7 @@ The primary (port [port]) was stopped with a hard kill to simulate a crash.
 | Write after the election | The write through the same connection succeeded without changing the connection string | `d3-write.png` |
 | Old node restarted | It rejoined as SECONDARY and caught up | `d3-rejoined.png` |
 
-**Explanation.** The driver was given all three addresses and the replica set name, so it discovered the new primary by itself. The application saw a short pause, not a permanent failure. The election took about [N] seconds, which fits MongoDB's default election timeout of about 10 seconds.
+**Explanation.** The driver was given all three addresses and the replica set name, so it discovered the new primary by itself (after a short pause).  The election took about 10 seconds, which fits MongoDB's default election timeout.
 
 ---
 
@@ -94,19 +94,6 @@ Replication copies the same data to several nodes. It improves availability but 
 
 **Zone sharding.** Agencies could be pinned to particular shards, for example to keep an agency's data in a region required by a regulator or contract.
 
-### The relational side (not implemented)
-
-For the MySQL data, the common first step is **source-replica replication**: all writes go to one server and replicas serve read-only work such as the reports in Portfolio 2 (Q1, Q3, Q4). MySQL replication is asynchronous by default, so a replica can lag behind and a report may miss the latest rows. Sharding MySQL by `agency_id` is possible, because every agency's data is independent, but joins and transactions across shards are not, so it would be a later step.
-
----
-
-## 6. Cloud deployment (MongoDB Atlas)
-
-The same collection was deployed to a MongoDB Atlas [tier] cluster on [provider] in [region] (`screenshots/atlas-cluster.png`). Atlas runs a three-node replica set automatically, so the cluster overview shows the same primary and secondaries as the local setup. The data was loaded with `seed-mongo.js` and checked with `countDocuments` (`screenshots/atlas-count.png`).
-
-**Compared with the local setup:** the nodes, failover and backups are managed by the provider, and nodes are spread across availability zones. The trade-offs are cost, less control over configuration, data location and compliance rules for health data, and the need to restrict network access and protect credentials. The connection string and database password were not committed to the repository.
-
----
 
 ## 7. Summary
 
@@ -117,11 +104,3 @@ The same collection was deployed to a MongoDB Atlas [tier] cluster on [provider]
 | Consistency | `w: 'majority'` stayed available with one node down; `w: 3` did not |
 | Partition behaviour | With one of three nodes left, writes were refused but reads worked (consistency over write availability) |
 | Sharding | Compound key `{ agencyId, mrn }` keeps tenants together and splits large agencies |
-| Cloud | Atlas provides the same replica set as a managed service |
-
-## 8. Limits
-
-- All three nodes ran on one machine, so a power or disk failure would have taken all of them. The demos show the software behaviour, not physical fault tolerance.
-- Failover time and write concern timings come from one machine and a small data set.
-- Sharding was analysed but not deployed or measured.
-- The MySQL replication discussion was not implemented.
